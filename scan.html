@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>바코드 찍기 · 강남대성</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0f19;color:#fff;font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:12px 14px}
+header b{font-size:18px;flex:1}
+button,a.btn{font:inherit;border:1px solid #3a4560;background:#1a2133;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;text-decoration:none;cursor:pointer}
+.p{background:#2f6bff;border-color:#2f6bff}
+#wrap{position:relative;margin:0 12px;border-radius:14px;overflow:hidden;background:#000;height:46vh;min-height:260px}
+video{width:100%;height:100%;object-fit:cover;display:block}
+.gd{position:absolute;left:6%;right:6%;top:25%;bottom:25%;border:3px solid rgba(255,255,255,.95);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none}
+.gd.hit{border-color:#3ddc84}
+#msg{padding:10px 14px;font-size:15px;line-height:1.5;min-height:46px}
+#msg .err{color:#ff8f85;font-weight:700}
+#list{margin:0 12px;display:grid;gap:6px;max-height:24vh;overflow:auto}
+#list div{display:flex;justify-content:space-between;align-items:center;background:#1a2133;border-radius:10px;padding:8px 12px;font-size:16px;font-variant-numeric:tabular-nums}
+#list button{padding:2px 10px;font-size:13px}
+footer{margin-top:auto;display:flex;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+footer>*{flex:1;text-align:center}
+#manual{display:flex;gap:6px;margin:8px 12px 0}
+#manual input{flex:1;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #3a4560;background:#111827;color:#fff}
+</style>
+</head>
+<body>
+<header><b>📷 바코드 찍기</b><span id="cnt"></span></header>
+<div id="wrap"><video id="v" playsinline muted autoplay></video><div class="gd" id="gd"></div></div>
+<div id="msg">카메라를 켜는 중이에요. 카메라 사용을 허용해 주세요.</div>
+<div id="list"></div>
+<div id="manual"><input id="mi" inputmode="numeric" placeholder="숫자로 직접 입력해도 돼요" autocomplete="off"><button id="ma">추가</button></div>
+<footer><a class="btn" id="back">취소</a><button class="p" id="done">완료 · 돌아가기</button></footer>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+/* 강남대성 교재 관리 프로그램 · 바코드 찍기 전용 페이지
+   - 이 페이지에는 데이터·비밀번호가 없어요. 찍은 번호만 프로그램 주소로 돌려보내요.
+   - 돌아갈 주소는 구글 웹 앱(script.google.com/macros/...)만 허용해요. */
+(function(){
+var P=new URLSearchParams(location.search),RET=P.get("ret")||"",MODE=P.get("mode")||"bar",MULTI=P.get("multi")!=="0",K=P.get("k")||"",WHO=P.get("who")||"";
+var OK=/^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\/[\w-]+\/(exec|dev)$/.test(RET);
+var codes=[],last="",lastT=0,ST=null,BD=null,TM=null;
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function msg(h){$("msg").innerHTML=h}
+function back(list){if(!OK){msg("<span class='err'>돌아갈 주소가 올바르지 않아요.</span> 프로그램에서 📷 카메라를 다시 눌러 주세요.");return}
+ stop();var u=RET+"?scan=1&mode="+encodeURIComponent(MODE)+"&k="+encodeURIComponent(K)+"&who="+encodeURIComponent(WHO)+"&t="+Date.now()+(list&&list.length?"&codes="+encodeURIComponent(list.join(",")):"");location.replace(u)}
+$("back").onclick=function(){back([])};
+$("done").onclick=function(){back(codes)};
+if(!MULTI)$("done").style.display="none";
+function draw(){$("cnt").textContent=MULTI?codes.length+"권":"";
+ $("list").innerHTML=codes.slice().reverse().map(function(c,i){var n=codes.length-1-i;return "<div><span>"+(n+1)+". "+esc(c)+"</span><span><button data-p='"+n+"'>+1</button> <button data-x='"+n+"'>빼기</button></span></div>"}).join("");
+ Array.prototype.forEach.call($("list").querySelectorAll("[data-x]"),function(b){b.onclick=function(){codes.splice(+b.getAttribute("data-x"),1);draw()}});
+ Array.prototype.forEach.call($("list").querySelectorAll("[data-p]"),function(b){b.onclick=function(){codes.push(codes[+b.getAttribute("data-p")]);draw()}})}
+function hit(c){c=String(c||"").trim();if(!c)return;var now=Date.now();if(c===last&&now-lastT<2500)return;last=c;lastT=now;
+ try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}$("gd").classList.add("hit");setTimeout(function(){$("gd").classList.remove("hit")},350);
+ if(!MULTI){back([c]);return}if(codes.length&&codes[codes.length-1]===c){msg("같은 바코드예요 (<b>"+esc(c)+"</b>). 한 권 더 줄 거면 목록의 [+1]을 누르세요.");return}codes.push(c);draw();msg("✔ <b>"+esc(c)+"</b> · 다음 책을 찍거나 [완료]를 누르세요.")}
+$("ma").onclick=function(){var v=$("mi").value.trim();if(v){$("mi").value="";hit(v)}};
+$("mi").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();$("ma").click()}};
+var ZR=null;function zx(c){var Z=window.ZXing;if(!Z)return null;if(!ZR){ZR=new Z.MultiFormatReader();var h=new Map(),F=Z.BarcodeFormat;h.set(Z.DecodeHintType.TRY_HARDER,true);
+ h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.CODE_93,F.ITF,F.CODABAR,F.QR_CODE].filter(function(x){return x!=null}));ZR.setHints(h)}
+ try{var t=ZR.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c))));return t&&t.getText()}catch(e){return null}}
+function stop(){clearTimeout(TM);if(ST){ST.getTracks().forEach(function(t){t.stop()});ST=null}}
+function start(){var v=$("v");
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){msg("<span class='err'>이 브라우저는 카메라를 쓸 수 없어요.</span> 크롬이나 사파리로 열어 주세요.");return}
+ navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false}).then(function(s){ST=s;v.srcObject=s;var p=v.play();return p&&p.catch?p.catch(function(){}):p}).then(function(){
+  msg(MULTI?"바코드를 흰 칸에 가로로 맞추세요. 여러 권을 연달아 찍을 수 있어요."+(WHO?"<br>받는 사람: <b>"+esc(WHO)+"</b>":""):"바코드를 흰 칸에 가로로 맞추세요. 찍히면 바로 돌아가요.");
+  try{if("BarcodeDetector" in window)BD=new BarcodeDetector()}catch(e){BD=null}
+  var cv=document.createElement("canvas"),busy=false;
+  (function tick(){if(!ST)return;TM=setTimeout(tick,BD?180:320);if(busy||!v.videoWidth)return;
+   var vw=v.videoWidth,vh=v.videoHeight,cw=Math.round(vw*0.9),ch=Math.round(vh*0.5),sc=Math.min(1,1000/cw);cv.width=Math.round(cw*sc);cv.height=Math.round(ch*sc);
+   cv.getContext("2d").drawImage(v,(vw-cw)/2,(vh-ch)/2,cw,ch,0,0,cv.width,cv.height);
+   if(BD){busy=true;BD.detect(cv).then(function(r){busy=false;if(r&&r.length)hit(r[0].rawValue)}).catch(function(){busy=false;BD=null})}
+   else hit(zx(cv))})()})
+ .catch(function(e){var n=String(e&&e.name||e);msg("<span class='err'>카메라를 켤 수 없어요 ("+esc(n)+").</span><br>주소창 왼쪽 자물쇠 → 권한 → 카메라를 ‘허용’으로 바꾼 뒤 새로고침해 주세요. 숫자를 아래에 직접 넣어도 돼요.")})}
+if(!OK)msg("<span class='err'>프로그램에서 📷 카메라를 눌러서 열어 주세요.</span>");
+draw();start();
+document.addEventListener("visibilitychange",function(){if(document.hidden)stop();else if(!ST)start()});
+})();
+</script>
+</body>
+</html>
